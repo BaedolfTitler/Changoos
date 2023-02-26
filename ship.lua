@@ -1,55 +1,53 @@
 ---
 --- Created by baedolf.
---- DateTime: 2/25/23 5:54 AM
+--- DateTime: 2/25/23 5:58 AM
 ---
--- simple argument parser for cc programs
-
-local str = require("stringTools")
 
 
---- KeyReg - A register for keys that a program may want to look for arguments with
---- @return table
-local function keyReg()
-    local keyReg = {}
-    keyReg.registerKey = function(tick, name, comment)
-        keyReg[tick] = {}
-        keyReg[tick].name = name
-        keyReg[tick].comment = comment
+
+--- map - Applies a function to each element in a table.
+---@param func function - The function to apply
+---@param tb table - The table to apply to
+---@param args table - The additional arguments for the function call
+---@return table - Table of elements from the function
+local function map(func, tb, args)
+    local t = {}
+    for k, v in ipairs(tb) do
+        t[k] = func(v, table.unpack(args))
     end
-    return keyReg
+    return t
 end
 
 
-
---- Takes all the arguments for a function and places them into their own tables
-local function parseArgs(key_reg, program_args)
-    local t = {}
-
-    -- search for tickmark arguments
-    for k, v in pairs(program_args) do
-        -- search all arguments passed for a leading tickmark
-        if string.match(string.sub(v, 1, 1), "-") == "-" then
-            local s = string.sub(v, 2) -- get what the tick actually is
-
-            -- is a single tick, place the following argument's value in the argTable
-            if string.len(s) == 1 then
-                local k_n, v_n = next(program_args, k)
-                if k_n ~= nil then
-                    local keyName = key_reg[s].name
-                    t[keyName] = v_n
-                end
-
-
-            -- if it's a compound argument, set values of the ticks to true
-            else
-                for _, b in pairs(str.split(s)) do
-                    local keyName = key_reg[b].name
-                    t[keyName] = true
-                end
-            end
+local function split(str, sep)
+    local t={}
+    if sep == nil then
+        for i=1,string.len(str) do
+            table.insert(t, string.sub(str, i, i))
+        end
+    else
+        for stn in string.gmatch(str, "([^"..sep.."]+)") do
+            table.insert(t, stn)
         end
     end
     return t
 end
 
-return {parseArgs=parseArgs, keyReg=keyReg}
+
+--- Returns the original string if a match is found
+local function softMatch(str, pattern)
+    if string.match(str, pattern) then
+        return str
+    end
+end
+
+--- Checks to see if a string(or substring) is in a table
+local function inTable(tb, str)
+    local m = map(softMatch, tb, {str})
+    if m ~= nil then
+        return m -- returns the table of elements that matched
+    else return nil
+    end
+end
+
+return {split=split, inTable=inTable}
