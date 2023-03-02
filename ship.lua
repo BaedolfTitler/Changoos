@@ -1,74 +1,113 @@
 ---
 --- Created by baedolf.
---- DateTime: 2/25/23 5:54 AM
+--- DateTime: 2/9/23 11:04 PM
 ---
--- simple argument parser for cc programs
 
-local str = require("stringTools")
-
-
---- KeyReg - A register for keys that a program may want to look for arguments with
---- @return table
-local function keyReg()
-    local keyReg = {}
-    keyReg.registerKey = function(tick, name, comment)
-        keyReg[tick] = {}
-        keyReg[tick].name = name
-        keyReg[tick].comment = comment
-    end
-    return keyReg
-end
--- >> kr = keyReg()
--- >> kr.registerKey("k", "keyName", "keyDesc")
+targs = { ... }
 
 
-local function hastick(in_str)
-    if type(in_str) == "string" then
-        if string.match(string.sub(in_str, 1, 1), "-") == "-" then
-            return true, string.sub(in_str, 2)
-        else return false, nil
+
+function TryMineMove(direction, variable)
+    -- Description: Tries to mine and make the bot move in a direction one time until it is successful
+    -- direction = F(front), U(up), D(down)
+    -- variable = The passed in variable that contains the move command
+
+
+    if direction == 'F' then -- execute when going forward
+        while variable ~= true do
+            turtle.dig()
+            variable = turtle.forward()
         end
-    else return false, nil
+    elseif direction == 'U' then -- execute when going up
+        while variable ~= true do
+            turtle.digUp()
+            variable = turtle.up()
+        end
+    elseif direction == 'D' then -- execute when going down
+        while variable ~= true do
+            turtle.digDown()
+            variable = turtle.down()
+        end
+    else do
+        print('Cant Find Direction...?')
+        return false
+        end
     end
+    return true
 end
 
 
---- Takes all the arguments for a function and places them into their own tables
-local function parseArgs(key_reg, program_args)
-    -- Maps found tickmark values to their registered names
-    local t = {}
+function MineRoom(length, width, height)
+    -- Description: Mines out a room of the desired dimensions from the bottom-right most block of said room
+    -- length = Length of the room
+    -- width = Width of the room
+    -- height = Height of the room
 
-    -- search for tickmark arguments
-    for k, v in pairs(program_args) do
-        -- search all arguments passed for a leading tickmark
-        local has_tick, tickval = hastick(v)
-        if has_tick then
-            -- is a single tick, place the following argument's value in the argTable
-            if string.len(tickval) == 1 then
-                local k_n, v_n = next(program_args, k)
-                local keyName = key_reg[tickval].name
+    local lMined = 0
+    local wMined = 0
+    local hMined = 0
+    flipSwitch = false -- A switch to let the robot determine which direction to turn in the zig-zag
+    function lengthMine()
+        -- Description: Bot mines the length of the room in a long strip
 
-                if hastick(v_n) == true then -- if the next argument is a tick, set current to true
-                    t[keyName] = true
+        while lMined < length do
+            l = turtle.forward()
+            TryMineMove('F', l)
+            lMined = lMined+1
+        end
+    end
 
-                elseif k_n ~= nil then
-                    t[keyName] = v_n
-                end
-
-
-            -- if it's a compound argument, set values of the ticks to true
-            else
-                for _, b in pairs(str.split(tickval, nil)) do
-                    local keyName = key_reg[b].name
-                    t[keyName] = true
+    function widthMine()
+        -- Description: Bot sets itself up for another lengthMine
+        lengthMine()
+        while wMined < width do
+            if flipSwitch == false then do
+                turtle.turnRight()
+                w = turtle.forward()
+                TryMineMove('F', w)
+                turtle.turnRight()
+                flipSwitch = true
+            end
+            else do
+                turtle.turnLeft()
+                w = turtle.forward()
+                TryMineMove('F', w)
+                turtle.turnLeft()
+                flipSwitch = false
                 end
             end
+            lMined = 1 -- reset LengthCount
+            lengthMine()
+            wMined = wMined+1
         end
     end
-    return t
+
+    function heightMine()
+        -- Description: Bot changes its height and continues mining
+
+        while hMined < height do
+            if hMined == 0 then do -- Skip the MoveUp segment for the first loop. Prevents bot from turning around on startup
+                hMined = hMined
+                end
+            else do
+                h = turtle.up()
+                TryMineMove('U', h)
+                turtle.turnLeft()
+                turtle.turnLeft()
+                end
+            end
+
+            wMined = 1 -- reset WidthCount
+            lMined = 1 -- reset LengthCount cause it's occupied
+
+            widthMine()
+            hMined = hMined+1
+        end
+    end
+
+    heightMine()
+
 end
--- >> p = parseArgs(kr, targs)
--- >> p -> {... name = value }
 
 
-return {parseArgs=parseArgs, keyReg=keyReg}
+MineRoom(48, 48, 6)
