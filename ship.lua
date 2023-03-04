@@ -1,113 +1,51 @@
 ---
 --- Created by baedolf.
---- DateTime: 2/9/23 11:04 PM
+--- DateTime: 2/25/23 4:47 AM
 ---
 
-targs = { ... }
 
-
-
-function TryMineMove(direction, variable)
-    -- Description: Tries to mine and make the bot move in a direction one time until it is successful
-    -- direction = F(front), U(up), D(down)
-    -- variable = The passed in variable that contains the move command
-
-
-    if direction == 'F' then -- execute when going forward
-        while variable ~= true do
-            turtle.dig()
-            variable = turtle.forward()
-        end
-    elseif direction == 'U' then -- execute when going up
-        while variable ~= true do
-            turtle.digUp()
-            variable = turtle.up()
-        end
-    elseif direction == 'D' then -- execute when going down
-        while variable ~= true do
-            turtle.digDown()
-            variable = turtle.down()
-        end
-    else do
-        print('Cant Find Direction...?')
-        return false
-        end
+-- Uses the monitor's blitting function to make cool log things
+--- Prints a message to the user
+local function message(msg, text_color, bg_color, ending)
+    term.blit(msg, string.rep(text_color, #msg), string.rep(bg_color, #msg))
+    if ending ~= nil then
+        term.write(ending)
+    else
+        term.write("\n")
     end
-    return true
 end
 
 
-function MineRoom(length, width, height)
-    -- Description: Mines out a room of the desired dimensions from the bottom-right most block of said room
-    -- length = Length of the room
-    -- width = Width of the room
-    -- height = Height of the room
+local function anger(msg) -- prints in a dark red color
+    local color = "e"
+    message(msg, color, "f", nil)
+end
 
-    local lMined = 0
-    local wMined = 0
-    local hMined = 0
-    flipSwitch = false -- A switch to let the robot determine which direction to turn in the zig-zag
-    function lengthMine()
-        -- Description: Bot mines the length of the room in a long strip
-
-        while lMined < length do
-            l = turtle.forward()
-            TryMineMove('F', l)
-            lMined = lMined+1
-        end
+local function happy(msg) -- prints in a green color
+    if _G.q ~= true then
+        local color = "d"
+        message(msg, color, "f", nil)
     end
-
-    function widthMine()
-        -- Description: Bot sets itself up for another lengthMine
-        lengthMine()
-        while wMined < width do
-            if flipSwitch == false then do
-                turtle.turnRight()
-                w = turtle.forward()
-                TryMineMove('F', w)
-                turtle.turnRight()
-                flipSwitch = true
-            end
-            else do
-                turtle.turnLeft()
-                w = turtle.forward()
-                TryMineMove('F', w)
-                turtle.turnLeft()
-                flipSwitch = false
-                end
-            end
-            lMined = 1 -- reset LengthCount
-            lengthMine()
-            wMined = wMined+1
-        end
-    end
-
-    function heightMine()
-        -- Description: Bot changes its height and continues mining
-
-        while hMined < height do
-            if hMined == 0 then do -- Skip the MoveUp segment for the first loop. Prevents bot from turning around on startup
-                hMined = hMined
-                end
-            else do
-                h = turtle.up()
-                TryMineMove('U', h)
-                turtle.turnLeft()
-                turtle.turnLeft()
-                end
-            end
-
-            wMined = 1 -- reset WidthCount
-            lMined = 1 -- reset LengthCount cause it's occupied
-
-            widthMine()
-            hMined = hMined+1
-        end
-    end
-
-    heightMine()
-
 end
 
 
-MineRoom(48, 48, 6)
+local function tell_amount(msg, number) -- prints in a blue color
+    if _G.q ~= true then
+        local text_color = "b"
+        local  number_color = "a"
+        number = string.rep(number, 1) -- convert number to string using dumb string method
+
+        term.blit(msg.." [", string.rep(text_color, #msg), string.rep("f", #msg))
+        term.blit(number, string.rep(number_color, #number), string.rep("f", #number))
+        term.blit("]\n", string.rep(text_color, 2), string.rep("f", 2))
+    end
+end
+
+local function info(msg) -- prints in a dull grey color, with special values
+    if _G.q ~= true then
+        local color = "8"
+        message(msg, color, "f", nil)
+    end
+end
+
+return {message = message, anger = anger, happy = happy, tell_amount = tell_amount, info = info}
