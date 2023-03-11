@@ -18,6 +18,9 @@ argKeys.registerKey("F", "FluidCrafting", "Numeric, Crafts n items using only fl
 argKeys.registerKey("c", "CraftMode", "Numeric, Will craft n items in an order using a process specified")
 argKeys.registerKey("X", "IntPurge", "Purges all fluids and items from the interfaces and returns them to the smeltery")
 argKeys.registerKey("q", "Quiet", "Will not print most messages")
+argKeys.registerKey("L", "LoopMode", "Will loop through")
+
+
 local pargs = argulator.parseArgs(argKeys, TARGS)
 
 -- Important values
@@ -27,43 +30,48 @@ SMELTERY = inv.softFindPeripheral("drain")
 
 
 
+
+
 -- ItemCrafting Functionality
-function CraftItems(amount)
+function CraftItems(amount, loop)
     -- implicit all
     if type(amount) ~= "number" or amount == 0 then
         amount = -1
     end
 
+    if loop then loop = true end
+
     local ss = smelterStack.smelterStack(INTERFACES)
     local rq = recipeQueue.recipeQueue()
 
     -- prompt for the recipe process
-    log.happy("Please specify the recipe to be crafted, separated by commas. e.g. `obsidian, molten_iron`")
+    log.happy("Please specify the recipe to be crafted, separated\nby commas. e.g. `obsidian, molten_iron`")
     rq.getUserRequest(amount)
     
     
     -- Get table type from user
-    log.happy("Please specify an interface type to craft in (table, basin, *_cast)")
+    log.happy("Please specify an interface type to craft in\n(table, basin, *_cast)")
     local tt = string.lower(io.read())
     
     
     ss.setSmeltery(SMELTERY)
     ss.setInventory(INVENTORY)
     ss.filterInterfaces(tt)
-    local resRecipe = rq.resolveItems(ss, rq.queue[1]) -- assume the queue only has the first recipe installed
+    ss.canCraftFromInventory(rq.queue[1])
+    local resRecipe = rq.resolveRecipe(ss, rq.queue[1]) -- assume the queue only has the first recipe installed
 
-    ss.calibrate(resRecipe)
+
+
 
     -- craftingLoop
     ss.dumpAttributes()
-
+    ss.craftAmount(resRecipe, amount, loop)
 
 end
 
 
 --- Program Initialization
 function FindInterfaces()
-
     -- Returns all interfaces in wrapped form
     local ints = {}
     for _, v in ipairs(peripheral.getNames()) do
@@ -87,7 +95,7 @@ while RUNNING do
 
 
     if pargs.CraftMode then
-        CraftItems(pargs.CraftMode)
+        CraftItems(tonumber(pargs.CraftMode), pargs.LoopMode)
     end
 
 

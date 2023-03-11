@@ -67,9 +67,8 @@ local function smelterStack(interfaces)
     s.ItemCrafting = false -- The smeltery is using item crafting
 
     -- amounts of fluid or items the smelter currently has left to work with
-    s.workingFirst = {name = nil, amount = 0}
-    s.workingSecond = {name = nil, amount = 0}
-
+    s.workingFirst = {name = nil, amount = false}
+    s.workingSecond = {name = nil, amount = false}
 
     --- vvvvvvvvvv
     --- Machine Management
@@ -87,16 +86,16 @@ local function smelterStack(interfaces)
         if str.softMatch(interfaceName, "cast") then cast = true else cast = false end -- find out if it's a cast
         log.info("Searching for "..interfaceName.."s...")
 
-        for _, i in s.interfaces do
+        for _, i in ipairs(s.interfaces) do
             local i_name = peripheral.getName(i)
             local toinsert = false
             -- filter tables and basins
-            if str.inTable({"tables", "basin"}, i_name) then -- oh yeah, it's if spam time
+            if str.softMatch(i_name, "table") or str.softMatch(i_name, "basin") then -- oh yeah, it's if spam time
                 toinsert = true
                 if cast then
                     toinsert = false
                     local tbcast = i.getItemDetail(1)
-                    if tbcast == nil then tbcast = {} end
+                    if tbcast == nil then tbcast = {name = ""} end
                     if str.softMatch(tbcast.name, interfaceName) then
                         if i.getItemDetail(2) then
                             log.info("Emptying cast: "..i_name)
@@ -110,7 +109,7 @@ local function smelterStack(interfaces)
                     if i.getItemDetail(1) then tHasItem = 1 end
                     if i.getItemDetail(2) then tHasItem = 2 end
                     if tHasItem then
-                        log.info("Emptying table: "..i_name)
+                        log.info("Emptying table: "..i_name.."["..tostring(tHasItem).."]")
                         i.pushItems(s.invName, tHasItem)
                     end
                 end
@@ -133,12 +132,13 @@ local function smelterStack(interfaces)
         if s.ItemCrafting then
             s.workingFirst.amount = inv.totalCount(s.inventory, recipe.first)
         else
-            _, _, s.workingFirst.amount = inv.findFluid(s.smeltery, recipe.first)
+            _, _, s.workingFirst.amount = inv.findFluid(s.smeltery.tanks(), recipe.first)
         end
 
-        s.workingSecond.name = recipe.second
-        _, _, s.workingSecond.amount = inv.findFluid(s.smeltery, recipe.second)
-        
+        if recipe.second ~= nil then
+            s.workingSecond.name = recipe.second
+            _, _, s.workingSecond.amount = inv.findFluid(s.smeltery.tanks(), recipe.second)
+        end
     end
 
     s.setInventory = function(inventory)
@@ -151,6 +151,13 @@ local function smelterStack(interfaces)
         -- Sets the stack's smeltery to a wrapped drain peripheral
         s.smeltery = smeltery
         s.smelteryName = peripheral.getName(s.smeltery)
+    end
+    
+    s.canCraftFromInventory = function(recipe)
+        -- checks to see if the requested first item is placed in the inventory
+        -- assumes first ingredient is a fluid if nothing's found
+        local itemName, itemSlot, itemCount = inv.findItem(s.inventory, recipe.first)
+        if recipe.second ~= nil and itemName then s.ItemCrafting = true end
     end
 
     s.calibrate = function(recipe)
@@ -165,10 +172,9 @@ local function smelterStack(interfaces)
 
         -- search for the specified item in the connected inventory
         local itemName, itemSlot, itemCount = inv.findItem(s.inventory, recipe.first)
-        if itemName then s.ItemCrafting = true end
 
         -- Item crafting
-        if s.ItemCrafting then
+        if recipe.second ~= nil and s.ItemCrafting then
             s.interfaces[1].pullItems(s.invName, itemSlot, 1, 1)
             s.secondMinimum = s.interfaces[1].pullFluid(s.smelteryName, 99999, recipe.second)
 
@@ -184,10 +190,10 @@ local function smelterStack(interfaces)
             s.firstMinimum = s.interfaces[1].pullFluid(s.smelteryName, 99999, recipe.first)
 
             -- move on to the second item if it exists, else just get the first coolTime
-            if recipe.second ~= nil then
+            if recipe.second ~= nil and recipe.second ~= false then
                 s.firstCoolTime = timeSmelt(s, true)
                 s.secondMinimum = s.interfaces[1].pullFluid(s.smelteryName, 99999, recipe.second)
-                s.secondCooltime = timeSmelt(s, true)
+                s.secondCooltime = timeSmelt(s, false)
                 recipe.amount = recipe.amount - 1
 
             else
@@ -202,12 +208,101 @@ local function smelterStack(interfaces)
     --- Machine Functionality
     ---
 
-    s.dumpAttributes = function()
-        log.tell_amount("First item cast time:", s.firstCoolTime.."s")
-        log.tell_amount("Second item cast time:", s.secondCooltime.."s")
 
-        log.tell_amount("Amount of Ingredient 1", s.workingFirst.amount)
-        log.tell_amount("Amount of Ingredient 2", s.workingSecond.amount)
+    s.craftAmount = function(recipe, amount, loop)
+        s.calibrate(recipe)
+
+        ::craftLoop::
+        -- craft `amount` items, if -1, craft until the program closes
+        while amount ~= 0 do
+            s.calculateAmounts(recipe)
+            -- Wait a little bit if some certain ingredient levels are low
+            if s.workingFirst.amount < s.firstMinimum then 
+                log.tell_amount("Need Ingredient 1:", s.firstMinimum - s.workingFirst)
+                os.sleep(5)
+            end
+            if s.workingSecond.amount < s.secondMinimum then 
+                log.tell_amount("Need Ingredient 1:", s.secondMinimum - s.workingSecond)
+                os.sleep(5)
+            end
+
+
+            local pullItems = false
+
+            -- First round of items/fluids
+            for _, i in ipairs(s.interfaces) do
+                -- Put items in tables, or cast first fluid
+                if s.workingFirst.amount >= s.firstMinimum then
+                    local m_amount
+
+                    if s.ItemCrafting then
+                        local itemName, itemSlot, itemCount = inv.findItem(s.inventory, recipe.first)
+                        m_amount = i.pullItems(s.invName, itemSlot, 1, 1)
+                        if m_amount == 0 then goto firstDump else
+                        s.workingFirst.amount = s.workingFirst.amount - m_amount end
+
+                    else
+                        m_amount = i.pullFluid(s.smelteryName, s.firstMinimum, recipe.first)
+                        if m_amount == 0 then goto firstDump else
+                        s.workingFirst.amount = s.workingFirst.amount - m_amount end
+
+                        -- pull items if this is the only item to be crafted
+                        if recipe.second == nil or recipe.second == false then
+                            pullItems = true
+                        end
+                    end
+                end
+                    ::firstDump::
+            end
+
+            -- Wait for the items to cool
+            os.sleep(s.firstCoolTime)
+
+            -- Pull items if needed
+            if pullItems then
+                for _, i in ipairs(s.interfaces) do
+                    local m_items = i.pushItems(s.invName, 2)
+                    amount = amount - m_items
+                end
+                goto dumpLoop
+            end
+
+
+            -- continue to second item
+            for _, i in ipairs(s.interfaces) do
+                if s.workingSecond.amount >= s.secondMinimum then
+                    local m_amount = i.pullFluid(s.smelteryName, s.secondMinimum, recipe.second)
+                    if m_amount == 0 then goto secondDump else
+                    s.workingSecond.amount = s.workingSecond.amount - m_amount end
+                    end
+                end
+                ::secondDump::
+            end
+            
+            -- Wait for items to cool
+            os.sleep(s.secondCooltime)
+
+
+            -- pull all items
+            for _, i in ipairs(s.interfaces) do
+                local m_items = i.pushItems(s.invName, 2)
+                amount = amount - m_items
+            end
+
+        ::dumpLoop::
+        if loop then
+            os.sleep(3)
+            log.happy("looping...")
+            goto craftLoop
+        end
+    end
+
+    s.dumpAttributes = function()
+        log.tell_amount("First item cast time:", tostring(s.firstCoolTime).."s")
+        log.tell_amount("Second item cast time:", tostring(s.secondCooltime).."s")
+
+        log.tell_amount("Amount of Ingredient 1", tostring(s.workingFirst.amount))
+        log.tell_amount("Amount of Ingredient 2", tostring(s.workingSecond.amount))
     end
 
     return s

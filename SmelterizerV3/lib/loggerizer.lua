@@ -53,4 +53,12 @@ local function info(msg) -- prints in a dull grey color
     end
 end
 
+
+
+local function loading(msg, symbolTable) -- prints a message with a little loading icon
+
+end
+
+
+
 return {message = message, anger = anger, happy = happy, tell_amount = tell_amount, info = info}

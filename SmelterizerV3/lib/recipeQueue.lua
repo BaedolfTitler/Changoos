@@ -7,7 +7,7 @@
 
 local inv = require("lib/storageMan")
 local str = require("lib/stringTools")
-
+local log = require("lib/loggerizer")
 
 --- Recipe queue thing to manage order of items to be smelted into and things and stuff
 --- At the moment each instance of the "queue" may hold only one recipe, lol
@@ -54,6 +54,7 @@ local function recipeQueue()
 
             else -- Find a fluid of the type
                 local ffluid = inv.findFluid(smelterStack.smeltery.tanks(), recipe.first)
+                if ffluid == false then log.anger("Could not find fluid: "..recipe.first) end
                 resRecipe.first = ffluid
             end
             
