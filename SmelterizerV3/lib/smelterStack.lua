@@ -211,89 +211,88 @@ local function smelterStack(interfaces)
 
     s.craftAmount = function(recipe, amount, loop)
         s.calibrate(recipe)
+        L = true
+        while L
+            -- craft `amount` items, if -1, craft until the program closes
+            while amount ~= 0 do
+                s.calculateAmounts(recipe)
+                -- Wait a little bit if some certain ingredient levels are low
+                if s.workingFirst.amount < s.firstMinimum then 
+                    log.tell_amount("Need Ingredient 1:", s.firstMinimum - s.workingFirst)
+                    os.sleep(5)
+                end
+                if s.workingSecond.amount < s.secondMinimum then 
+                    log.tell_amount("Need Ingredient 1:", s.secondMinimum - s.workingSecond)
+                    os.sleep(5)
+                end
 
-        ::craftLoop::
-        -- craft `amount` items, if -1, craft until the program closes
-        while amount ~= 0 do
-            s.calculateAmounts(recipe)
-            -- Wait a little bit if some certain ingredient levels are low
-            if s.workingFirst.amount < s.firstMinimum then 
-                log.tell_amount("Need Ingredient 1:", s.firstMinimum - s.workingFirst)
-                os.sleep(5)
-            end
-            if s.workingSecond.amount < s.secondMinimum then 
-                log.tell_amount("Need Ingredient 1:", s.secondMinimum - s.workingSecond)
-                os.sleep(5)
-            end
 
+                local pullItems = false
 
-            local pullItems = false
+                -- First round of items/fluids
+                for _, i in ipairs(s.interfaces) do
+                    -- Put items in tables, or cast first fluid
+                    if s.workingFirst.amount >= s.firstMinimum then
+                        local m_amount
 
-            -- First round of items/fluids
-            for _, i in ipairs(s.interfaces) do
-                -- Put items in tables, or cast first fluid
-                if s.workingFirst.amount >= s.firstMinimum then
-                    local m_amount
+                        if s.ItemCrafting then
+                            local itemName, itemSlot, itemCount = inv.findItem(s.inventory, recipe.first)
+                            m_amount = i.pullItems(s.invName, itemSlot, 1, 1)
+                            if m_amount == 0 then break else
+                            s.workingFirst.amount = s.workingFirst.amount - m_amount end
 
-                    if s.ItemCrafting then
-                        local itemName, itemSlot, itemCount = inv.findItem(s.inventory, recipe.first)
-                        m_amount = i.pullItems(s.invName, itemSlot, 1, 1)
-                        if m_amount == 0 then goto firstDump else
-                        s.workingFirst.amount = s.workingFirst.amount - m_amount end
+                        else
+                            m_amount = i.pullFluid(s.smelteryName, s.firstMinimum, recipe.first)
+                            if m_amount == 0 then break else
+                            s.workingFirst.amount = s.workingFirst.amount - m_amount end
 
-                    else
-                        m_amount = i.pullFluid(s.smelteryName, s.firstMinimum, recipe.first)
-                        if m_amount == 0 then goto firstDump else
-                        s.workingFirst.amount = s.workingFirst.amount - m_amount end
-
-                        -- pull items if this is the only item to be crafted
-                        if recipe.second == nil or recipe.second == false then
-                            pullItems = true
+                            -- pull items if this is the only item to be crafted
+                            if recipe.second == nil or recipe.second == false then
+                                pullItems = true
+                            end
                         end
                     end
                 end
-                    ::firstDump::
-            end
 
-            -- Wait for the items to cool
-            os.sleep(s.firstCoolTime)
+                -- Wait for the items to cool
+                os.sleep(s.firstCoolTime)
 
-            -- Pull items if needed
-            if pullItems then
+                -- Pull items if needed
+                if pullItems then
+                    for _, i in ipairs(s.interfaces) do
+                        local m_items = i.pushItems(s.invName, 2)
+                        amount = amount - m_items
+                    end
+                    break
+                end
+
+
+                -- continue to second item
+                for _, i in ipairs(s.interfaces) do
+                    if s.workingSecond.amount >= s.secondMinimum then
+                        local m_amount = i.pullFluid(s.smelteryName, s.secondMinimum, recipe.second)
+                        if m_amount == 0 then break else
+                        s.workingSecond.amount = s.workingSecond.amount - m_amount end
+                        end
+                    end
+                end
+                
+                -- Wait for items to cool
+                os.sleep(s.secondCooltime)
+
+
+                -- pull all items
                 for _, i in ipairs(s.interfaces) do
                     local m_items = i.pushItems(s.invName, 2)
                     amount = amount - m_items
                 end
-                goto dumpLoop
+
+                
+            if loop then
+                os.sleep(3)
+                log.happy("looping...")
+                L = true
             end
-
-
-            -- continue to second item
-            for _, i in ipairs(s.interfaces) do
-                if s.workingSecond.amount >= s.secondMinimum then
-                    local m_amount = i.pullFluid(s.smelteryName, s.secondMinimum, recipe.second)
-                    if m_amount == 0 then goto secondDump else
-                    s.workingSecond.amount = s.workingSecond.amount - m_amount end
-                    end
-                end
-                ::secondDump::
-            end
-            
-            -- Wait for items to cool
-            os.sleep(s.secondCooltime)
-
-
-            -- pull all items
-            for _, i in ipairs(s.interfaces) do
-                local m_items = i.pushItems(s.invName, 2)
-                amount = amount - m_items
-            end
-
-        ::dumpLoop::
-        if loop then
-            os.sleep(3)
-            log.happy("looping...")
-            goto craftLoop
         end
     end
 
